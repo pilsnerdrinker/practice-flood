@@ -409,6 +409,12 @@
       -webkit-user-select: none;
     }
 
+    .point-hit {
+      fill: transparent;
+      stroke: transparent;
+      pointer-events: all;
+    }
+
     .point.dim { opacity: 1; }
     .point.good circle,
     .point.bad circle {
@@ -1051,7 +1057,13 @@
         text.setAttribute('y', pos.y + .2);
         text.textContent = key;
 
-        g.append(circle, text);
+        const hit = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        hit.setAttribute('class', 'point-hit');
+        hit.setAttribute('cx', pos.x);
+        hit.setAttribute('cy', pos.y);
+        hit.setAttribute('r', '7.8');
+
+        g.append(circle, text, hit);
         g.addEventListener('pointerdown', ev => {
           if (ev.button !== undefined && ev.button !== 0) return;
           ev.preventDefault();
@@ -1284,8 +1296,6 @@
       els.resultText.textContent = `選択：${key}側`;
       els.log.textContent = `${key}側を選択中。判定は${step + 6}枚目の最後に行います。`;
       updatePointClasses();
-      renderQuestion();
-      renderCenterOverlay();
     }
 
     function nextLogText() {
