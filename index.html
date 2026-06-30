@@ -409,9 +409,10 @@
       -webkit-user-select: none;
     }
 
-    .point-hit {
+    .point .point-hit {
       fill: transparent;
       stroke: transparent;
+      stroke-width: 0;
       pointer-events: all;
     }
 
@@ -1063,7 +1064,7 @@
         hit.setAttribute('cy', pos.y);
         hit.setAttribute('r', '7.8');
 
-        g.append(circle, text, hit);
+        g.append(hit, circle, text);
         g.addEventListener('pointerdown', ev => {
           if (ev.button !== undefined && ev.button !== 0) return;
           ev.preventDefault();
