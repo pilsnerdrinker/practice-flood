@@ -410,21 +410,21 @@
     }
 
     .point .point-hit {
-      fill: transparent;
-      stroke: transparent;
-      stroke-width: 0;
+      fill: transparent !important;
+      stroke: transparent !important;
+      stroke-width: 0 !important;
       pointer-events: all;
     }
 
     .point.dim { opacity: 1; }
-    .point.good circle,
-    .point.bad circle {
+    .point.good circle:not(.point-hit),
+    .point.bad circle:not(.point-hit) {
       fill: #283241;
       stroke: #f1c84b;
       stroke-width: 1.8;
     }
-    .point.selected-point circle { stroke: #f1c84b; stroke-width: 1.8; }
-    .point.answer circle { fill: #283241; stroke: #73e6a2; stroke-width: 2.2; }
+    .point.selected-point circle:not(.point-hit) { stroke: #f1c84b; stroke-width: 1.8; }
+    .point.answer circle:not(.point-hit) { fill: #283241; stroke: #73e6a2; stroke-width: 2.2; }
 
     .stack-ring {
       fill: rgba(232, 104, 93, .12);
