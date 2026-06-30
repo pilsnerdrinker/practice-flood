@@ -384,6 +384,7 @@
       opacity: 1 !important;
       user-select: none;
       -webkit-user-select: none;
+      touch-action: manipulation;
     }
 
     .point:focus,
@@ -566,6 +567,34 @@
       color: var(--muted);
       line-height: 1.5;
     }
+
+    .result-log {
+      display: grid;
+      gap: 6px;
+    }
+
+    .result-summary {
+      color: #f1eadf;
+      font-weight: 800;
+    }
+
+    .result-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 7px;
+      border: 1px solid #46505f;
+      border-radius: 7px;
+      background: #171d27;
+    }
+
+    .result-row.ok { border-color: #3f7a55; background: #1f3229; }
+    .result-row.miss { border-color: #8b4848; background: #392125; }
+    .result-main { color: #f1eadf; }
+    .result-status { font-weight: 800; }
+    .result-row.ok .result-status { color: #73e6a2; }
+    .result-row.miss .result-status { color: #ff8b82; }
 
     .source {
       margin-top: 10px;
@@ -803,6 +832,8 @@
       endsAt: 0,
       duration: 0,
       selected: [],
+      pendingSelections: [null, null, null],
+      answers: [],
       pattern: null,
       phase: 'idle',
       activeIndex: -1,
@@ -898,6 +929,8 @@
       state.revealMode = 'none';
       state.locked = true;
       state.selected = [];
+      state.pendingSelections = [null, null, null];
+      state.answers = [];
       state.phase = state.mode === 'position' ? 'position' : 'idle';
       state.activeIndex = state.mode === 'position' ? 0 : -1;
       state.answeredThisActivation = false;
@@ -997,19 +1030,12 @@
     }
 
     function renderPoints() {
-      const pat = currentPattern();
-      const routeSet = new Set(pat.route);
-      const correct = correctMarkerForStep(visibleStep());
-      const singleAnswer = singleAnswerKey();
-      els.points.innerHTML = '';
-
+      if (els.points.children.length) {
+        updatePointClasses();
+        return;
+      }
       Object.entries(markerPoints).forEach(([key, pos]) => {
         const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        const classes = ['point'];
-        if (state.selected.includes(key)) classes.push(key === correct ? 'good' : 'bad', 'selected-point');
-        if (state.revealMode === 'all' && routeSet.has(key)) classes.push('answer');
-        if (state.revealMode === 'single' && key === singleAnswer) classes.push('answer');
-        g.setAttribute('class', classes.join(' '));
         g.setAttribute('data-marker', key);
         g.setAttribute('tabindex', '0');
         g.setAttribute('role', 'button');
@@ -1026,7 +1052,11 @@
         text.textContent = key;
 
         g.append(circle, text);
-        g.addEventListener('click', () => chooseMarker(key));
+        g.addEventListener('pointerdown', ev => {
+          if (ev.button !== undefined && ev.button !== 0) return;
+          ev.preventDefault();
+          chooseMarker(key);
+        });
         g.addEventListener('keydown', ev => {
           if (ev.key === 'Enter' || ev.key === ' ') {
             ev.preventDefault();
@@ -1034,6 +1064,23 @@
           }
         });
         els.points.appendChild(g);
+      });
+      updatePointClasses();
+    }
+
+    function updatePointClasses() {
+      const pat = currentPattern();
+      const routeSet = new Set(pat.route);
+      const correct = correctMarkerForStep(visibleStep());
+      const singleAnswer = singleAnswerKey();
+      Object.keys(markerPoints).forEach(key => {
+        const g = els.points.querySelector(`[data-marker="${key}"]`);
+        if (!g) return;
+        const classes = ['point'];
+        if (state.selected.includes(key)) classes.push(key === correct ? 'good' : 'bad', 'selected-point');
+        if (state.revealMode === 'all' && routeSet.has(key)) classes.push('answer');
+        if (state.revealMode === 'single' && key === singleAnswer) classes.push('answer');
+        g.setAttribute('class', classes.join(' '));
       });
     }
 
@@ -1220,35 +1267,69 @@
         els.log.textContent = ok
           ? '正解。発動した危険床を避けられています。'
           : `このスライドの正解は${answer}側です。`;
-        render();
+        updatePointClasses();
+        renderQuestion();
+        renderCenterOverlay();
         return;
       }
-      if (state.locked) return;
-      if (state.phase !== 'active' || state.activeIndex > 2) {
-        els.log.textContent = '発動中だけ回答できます。';
+      const step = pendingAnswerStep();
+      if (step === null) {
+        els.log.textContent = '今は回答を選択しないタイミングです。';
         return;
       }
 
-      const answer = correctMarkerForStep();
-      const ok = key === answer;
-      state.selected.push(key);
-      state.total += 1;
-      if (ok) state.correct += 1;
-
-      els.resultText.textContent = ok ? '正解' : `不正解（正解：${answer}側）`;
-      els.log.textContent = ok
-        ? nextLogText()
-        : `今は「${answer}側」を選ぶ場面。正解ルートは ${formatRoute(currentPattern().route)}。`;
-
+      state.pendingSelections[step] = key;
+      state.selected = [key];
       state.answeredThisActivation = true;
-      state.locked = true;
-      render();
+      els.resultText.textContent = `選択：${key}側`;
+      els.log.textContent = `${key}側を選択中。判定は${step + 6}枚目の最後に行います。`;
+      updatePointClasses();
+      renderQuestion();
+      renderCenterOverlay();
     }
 
     function nextLogText() {
       if (state.step === 0) return '1回目安置OK。1回目の着弾を見たら、1回目跡地へ。';
       if (state.step === 1) return '1回目跡地OK。2回目の着弾を見たら、2回目跡地へ。';
       return '2回目跡地OK。そのまま動かず3・4回目も避ける。';
+    }
+
+    function recordPracticeAnswer(step, selected, correct, ok) {
+      if (step > 2 || state.answers.some(answer => answer.step === step)) return;
+      state.answers.push({ step, selected, correct, ok });
+      state.total += 1;
+      if (ok) state.correct += 1;
+    }
+
+    function pendingAnswerStep() {
+      if (state.mode !== 'practice') return null;
+      if (state.phase === 'countdown' || state.phase === 'telegraph' || state.phase === 'gap') return 0;
+      if (state.phase === 'active' && state.activeIndex < 3) return state.step;
+      return null;
+    }
+
+    function ensureAnswerRecorded(step) {
+      if (step > 2 || state.answers.some(answer => answer.step === step)) return;
+      const selected = state.pendingSelections[step];
+      const correct = currentPattern().route[step];
+      recordPracticeAnswer(step, selected, correct, selected === correct);
+    }
+
+    function resultLogHtml() {
+      const labels = ['1回目安置', '1回目跡地', '2回目跡地'];
+      const rows = labels.map((label, step) => {
+        const answer = state.answers.find(item => item.step === step) || {
+          step,
+          selected: null,
+          correct: currentPattern().route[step],
+          ok: false
+        };
+        const selected = answer.selected ? `${answer.selected}側` : '未回答';
+        const status = answer.ok ? 'OK' : 'MISS';
+        return `<div class="result-row ${answer.ok ? 'ok' : 'miss'}"><span class="result-main">${label}：選択 ${selected} / 正解 ${answer.correct}側</span><span class="result-status">${status}</span></div>`;
+      }).join('');
+      const okCount = state.answers.filter(answer => answer.ok).length;
+      return `<div class="result-log"><div class="result-summary">結果：${okCount} / 3</div>${rows}</div>`;
     }
 
     function showAnswer() {
@@ -1292,6 +1373,7 @@
       state.phase = 'countdown';
       state.activeIndex = -1;
       state.revealMode = 'none';
+      state.pendingSelections = [null, null, null];
       state.paused = false;
       state.countdownText = '3';
       els.phaseLabel.textContent = '実践：カウント中';
@@ -1316,18 +1398,20 @@
       state.phase = info.kind;
       state.activeIndex = info.index;
       state.step = info.step;
-      state.selected = [];
+      state.selected = info.step < 3 && state.pendingSelections[info.step] ? [state.pendingSelections[info.step]] : [];
       state.showAnswer = false;
       state.revealMode = 'none';
-      state.answeredThisActivation = false;
-      state.locked = !(info.kind === 'active' && info.index < 3);
-      els.resultText.textContent = info.kind === 'active' && info.index < 3 ? '回答中' : info.kind === 'gap' ? '待機' : '確認中';
+      state.answeredThisActivation = Boolean(info.step < 3 && state.pendingSelections[info.step]);
+      state.locked = false;
+      els.resultText.textContent = info.step < 3 && state.pendingSelections[info.step]
+        ? `選択：${state.pendingSelections[info.step]}側`
+        : info.index < 3 ? '選択待ち' : info.kind === 'gap' ? '待機' : '確認中';
       if (info.kind === 'telegraph') {
-        els.log.textContent = `${slide + 1}枚目：赤い予兆を覚えます。`;
+        els.log.textContent = `${slide + 1}枚目：赤い予兆を覚えながら、1回目安置を先に選択できます。`;
       } else if (info.kind === 'gap') {
-        els.log.textContent = '5枚目：待機の1秒。';
+        els.log.textContent = '5枚目：待機の1秒。1回目安置の選択はまだ変更できます。';
       } else if (info.index < 3) {
-        els.log.textContent = `${slide + 1}枚目：実際の安置をクリック。`;
+        els.log.textContent = `${slide + 1}枚目：選択中の回答をこのスライドの最後に判定します。`;
       } else {
         els.log.textContent = '9枚目：そのまま待機。';
       }
@@ -1351,8 +1435,19 @@
       state.locked = true;
       state.showAnswer = true;
       state.revealMode = 'single';
-      els.resultText.textContent = `正解：${singleAnswerKey()}側`;
-      els.log.textContent = 'このスライドの正解位置だけを0.2秒表示。';
+      if (info.kind === 'active' && info.index < 3) {
+        ensureAnswerRecorded(info.step);
+      }
+      const recorded = state.answers.find(answer => answer.step === info.step);
+      if (recorded && info.index < 3) {
+        els.resultText.textContent = recorded.ok
+          ? '正解'
+          : recorded.selected ? `不正解（正解：${recorded.correct}側）` : `未回答（正解：${recorded.correct}側）`;
+        els.log.textContent = recorded.ok ? nextLogText() : `この判定の正解は${recorded.correct}側です。`;
+      } else {
+        els.resultText.textContent = `正解：${singleAnswerKey()}側`;
+        els.log.textContent = 'このスライドの正解位置だけを0.2秒表示。';
+      }
       render();
       runSegment(200, () => {
         if (slide < 8) {
@@ -1371,7 +1466,7 @@
       state.showAnswer = true;
       state.revealMode = 'all';
       els.resultText.textContent = '完了';
-      els.log.textContent = `3秒間、全体の正解ルートを表示します。${formatRoute(currentPattern().route)}。`;
+      els.log.innerHTML = resultLogHtml();
       render();
       runSegment(3000, () => {
         stopTimer();
@@ -1480,11 +1575,11 @@
       state.phase = info.kind;
       state.activeIndex = info.index;
       state.step = info.step;
-      state.selected = [];
+      state.selected = info.step < 3 && state.pendingSelections[info.step] ? [state.pendingSelections[info.step]] : [];
       state.showAnswer = false;
       state.revealMode = 'none';
-      state.answeredThisActivation = false;
-      state.locked = true;
+      state.answeredThisActivation = Boolean(info.step < 3 && state.pendingSelections[info.step]);
+      state.locked = false;
       state.pauseRemaining = practiceSlideDuration(nextSlide);
       state.duration = state.pauseRemaining;
       state.pendingOnDone = () => {
@@ -1495,7 +1590,9 @@
         }
       };
       setTimerScale(1);
-      els.resultText.textContent = info.kind === 'active' && info.index < 3 ? '一時停止中' : '確認中';
+      els.resultText.textContent = info.step < 3 && state.pendingSelections[info.step]
+        ? `選択：${state.pendingSelections[info.step]}側`
+        : '一時停止中';
       els.log.textContent = `一時停止中：${slideTitleText(nextSlide)}を表示しています。`;
       render();
     }
