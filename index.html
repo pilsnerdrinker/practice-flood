@@ -1,0 +1,1606 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>P5 フラッド練習</title>
+  <style>
+    :root {
+      --bg: #151820;
+      --panel: #202632;
+      --ink: #f1eadf;
+      --muted: #b9ad9e;
+      --line: #46505f;
+      --accent: #45b49f;
+      --accent-2: #e59b2f;
+      --flood: #4d82cf;
+      --bad: #c83e3e;
+      --good: #2f8f58;
+      --select: #d8b025;
+      --shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 50% -10%, rgba(69, 180, 159, 0.16), transparent 38%),
+        var(--bg);
+    }
+
+    a { color: #84d8ca; }
+
+    .app {
+      width: min(1180px, calc(100% - 24px));
+      margin: 0 auto;
+      padding: 16px 0 24px;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      margin: 0 0 4px;
+      font-size: clamp(22px, 3.5vw, 34px);
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      padding-top: 2px;
+    }
+
+    .pill-link,
+    button,
+    select {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      border-radius: 8px;
+      min-height: 36px;
+      padding: 7px 11px;
+      font: inherit;
+    }
+
+    .pill-link {
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    button {
+      cursor: pointer;
+      transition: transform .08s ease, border-color .12s ease, background .12s ease;
+    }
+
+    button:hover { border-color: #7e8ba0; }
+    button:active { transform: translateY(1px); }
+    button.primary { background: #2c8d7d; border-color: #36a08f; color: #fff; }
+    button.ghost { background: transparent; }
+    button.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(47, 127, 112, .18); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .stage,
+    .side {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .stage {
+      padding: 12px;
+      min-width: 0;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .segmented {
+      display: inline-flex;
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #171d27;
+      gap: 3px;
+    }
+
+    .segmented button {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      min-height: 30px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .segmented button.active {
+      background: #2c8d7d;
+      color: #fff;
+      box-shadow: 0 0 0 2px rgba(114, 215, 255, .28);
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .slide-nav {
+      display: none;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .slide-nav button {
+      min-width: 34px;
+      min-height: 30px;
+      padding: 3px 9px;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .slide-nav span {
+      min-width: 64px;
+      text-align: center;
+      font-weight: 700;
+      color: #d8cdbf;
+    }
+
+    .timer {
+      flex: 1 1 220px;
+      height: 10px;
+      border: 1px solid #46505f;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #151a23;
+      min-width: 160px;
+    }
+
+    .timer > span {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #45b49f, #d9a441);
+      transform-origin: left center;
+      transform: scaleX(var(--time, 1));
+    }
+
+    .map-timer {
+      width: min(100%, 680px);
+      margin: 0 auto 8px;
+      display: none;
+    }
+
+    .map-timer .timer {
+      width: 100%;
+      flex: none;
+    }
+
+    .map-slide-title {
+      width: min(100%, 680px);
+      margin: 0 auto 8px;
+      min-height: 28px;
+      display: grid;
+      align-items: center;
+      justify-items: start;
+      color: #f1eadf;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .arena-wrap {
+      position: relative;
+      width: min(100%, 680px);
+      margin: 0 auto;
+      aspect-ratio: 1;
+    }
+
+    .center-overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      place-items: center;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .center-panel {
+      display: grid;
+      gap: 10px;
+      justify-items: center;
+      padding: 16px 18px;
+      border-radius: 8px;
+      border: 1px solid rgba(114, 215, 255, .45);
+      background: rgba(18, 24, 34, .88);
+      box-shadow: 0 14px 34px rgba(0,0,0,.36);
+      pointer-events: auto;
+    }
+
+    .center-count {
+      min-width: 72px;
+      text-align: center;
+      color: #f1eadf;
+      font-size: 42px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    #centerStartBtn {
+      min-height: 48px;
+      min-width: 132px;
+      padding: 11px 22px;
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .corner-slide-nav {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      z-index: 4;
+    }
+
+    .corner-slide-nav button {
+      min-width: 34px;
+      min-height: 30px;
+      padding: 2px 8px;
+      border-color: rgba(126, 139, 160, .85);
+      background: rgba(18, 24, 34, .78);
+      color: #e8f6f8;
+      font-size: 17px;
+      line-height: 1;
+    }
+
+    .corner-slide-nav button:disabled {
+      opacity: .35;
+      cursor: default;
+    }
+
+    .corner-slide-label {
+      min-width: 46px;
+      padding: 4px 8px;
+      border: 1px solid rgba(126, 139, 160, .72);
+      border-radius: 7px;
+      background: rgba(18, 24, 34, .78);
+      color: #e8f6f8;
+      font-size: 13px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .map-controls {
+      width: min(100%, 680px);
+      margin: 10px auto 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .map-control-row {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .map-control-row button {
+      min-width: 96px;
+    }
+
+    .check-control {
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #171d27;
+      color: #d8cdbf;
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .check-control input {
+      width: 15px;
+      height: 15px;
+      accent-color: #45b49f;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .lane {
+      fill: #b84d58;
+      opacity: .58;
+      mix-blend-mode: normal;
+    }
+
+    .lane-1 { opacity: .62; }
+    .lane-2 { opacity: .58; }
+    .lane-3 { opacity: .54; }
+    .lane-4 { opacity: .50; }
+
+    .lane.hidden-lane { opacity: .08; }
+    .lane.actual-lane {
+      opacity: .74;
+      fill: #75d4e8;
+    }
+    .marker-label {
+      font-weight: 800;
+      fill: #b8d6df;
+      font-size: 6px;
+    }
+
+    .point {
+      cursor: pointer;
+      transition: opacity .12s ease;
+      opacity: 1 !important;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .point:focus,
+    .point:focus-visible {
+      outline: none;
+    }
+
+    .point circle {
+      fill: #283241;
+      stroke: #9db7c3;
+      stroke-width: 1.6;
+    }
+
+    .point text {
+      fill: #f1eadf;
+      font-weight: 800;
+      font-size: 4.2px;
+      text-anchor: middle;
+      dominant-baseline: middle;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .point.dim { opacity: 1; }
+    .point.good circle,
+    .point.bad circle {
+      fill: #283241;
+      stroke: #f1c84b;
+      stroke-width: 1.8;
+    }
+    .point.selected-point circle { stroke: #f1c84b; stroke-width: 1.8; }
+    .point.answer circle { fill: #283241; stroke: #73e6a2; stroke-width: 2.2; }
+
+    .stack-ring {
+      fill: rgba(232, 104, 93, .12);
+      stroke: #e66f66;
+      stroke-width: 1.8;
+      stroke-dasharray: 2.5 1.8;
+      pointer-events: none;
+    }
+
+    .path-line {
+      fill: none;
+      stroke: #d9bd4b;
+      stroke-width: 1.45;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .side {
+      padding: 12px;
+    }
+
+    .question {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+    }
+
+    .phase {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: #153b38;
+      color: #9de7d8;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .question h2 {
+      margin: 0 0 6px;
+      font-size: 19px;
+    }
+
+    .question p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .controls .wide { grid-column: 1 / -1; }
+
+    .route-box {
+      display: grid;
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .route {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #1b222d;
+      font-size: 14px;
+    }
+
+    .route strong {
+      color: #eee2d1;
+      white-space: nowrap;
+    }
+
+    .steps {
+      display: grid;
+      gap: 7px;
+      margin: 12px 0;
+    }
+
+    .step {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #46505f;
+      background: #1b222d;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .step b {
+      display: inline-grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: #313a49;
+      flex: 0 0 auto;
+      font-size: 12px;
+    }
+
+    .step.done { border-color: #3f7a55; background: #1f3229; }
+    .step.current { border-color: #d8b025; background: #382f16; }
+    .step.miss { border-color: #8b4848; background: #392125; }
+
+    .legend {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .swatch {
+      width: 22px;
+      height: 12px;
+      border-radius: 3px;
+      border: 1px solid rgba(0,0,0,.14);
+    }
+
+    .log {
+      min-height: 44px;
+      padding: 9px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #1b222d;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .source {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      header { flex-direction: column; }
+      .header-actions { justify-content: flex-start; }
+    }
+
+    @media (max-width: 520px) {
+      .app { width: min(100% - 14px, 1180px); padding-top: 10px; }
+      .stage, .side { padding: 9px; }
+      .controls { grid-template-columns: 1fr; }
+      .controls .wide { grid-column: auto; }
+      .legend { grid-template-columns: 1fr; }
+      .topbar { align-items: stretch; }
+      .status { width: 100%; }
+      .timer { flex-basis: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div>
+        <h1>P5 フラッド練習</h1>
+      <p class="subtitle">斜めの4列予兆を見て、中央付近で待機し、1回目跡地、2回目跡地へ入る練習。</p>
+      </div>
+      <div class="header-actions">
+        <a class="pill-link" href="README.md">使い方・仕様（README）を見る</a>
+        <a class="pill-link" href="https://pilsnerdrinker.github.io/raidshelf/" target="_blank" rel="noreferrer">他の練習ページ：raidshelf</a>
+        <select aria-label="処理方式">
+          <option>Poikos式</option>
+        </select>
+      </div>
+    </header>
+
+    <section class="layout">
+      <div class="stage">
+        <div class="topbar">
+          <div class="segmented" aria-label="モード切替">
+            <button type="button" data-mode="position">位置確認</button>
+            <button type="button" data-mode="practice" class="active">実践</button>
+          </div>
+          <div class="status">
+            <span id="score">正解 0 / 0</span>
+          </div>
+        </div>
+        <div class="map-timer" id="mapTimer">
+          <div class="timer" aria-label="シークバー"><span id="timerBar"></span></div>
+        </div>
+        <div class="map-slide-title" id="mapSlideTitle">予兆 1</div>
+        <div class="arena-wrap">
+          <svg id="arena" viewBox="0 0 100 100" role="img" aria-label="フラッド練習用フィールド">
+            <defs>
+              <clipPath id="arenaClip">
+                <circle cx="50" cy="50" r="46"></circle>
+              </clipPath>
+              <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="1.5" stdDeviation="1.2" flood-color="#000" flood-opacity=".16"></feDropShadow>
+              </filter>
+              <marker id="routeArrow" markerWidth="3.8" markerHeight="3.8" refX="3.25" refY="1.9" orient="auto">
+                <path d="M0,0 L3.8,1.9 L0,3.8 Z" fill="#d9bd4b"></path>
+              </marker>
+            </defs>
+
+            <circle cx="50" cy="50" r="47.5" fill="#1b222d" stroke="#6f7a8c" stroke-width="1.1"></circle>
+            <circle cx="50" cy="50" r="31" fill="none" stroke="#5c6676" stroke-width=".7" stroke-dasharray="1.8 1.8"></circle>
+
+            <g clip-path="url(#arenaClip)">
+              <rect x="0" y="0" width="100" height="100" fill="#1b222d"></rect>
+              <g id="lanes"></g>
+            </g>
+
+            <text class="marker-label" x="50" y="8.5" text-anchor="middle">A</text>
+            <text class="marker-label" x="92.5" y="52" text-anchor="middle">B</text>
+            <text class="marker-label" x="50" y="95" text-anchor="middle">C</text>
+            <text class="marker-label" x="7.5" y="52" text-anchor="middle">D</text>
+
+            <path id="path" class="path-line" d="" opacity="0"></path>
+            <path id="path2" class="path-line" d="" opacity="0"></path>
+            <circle id="stackRing" class="stack-ring" cx="50" cy="50" r="9" opacity="0"></circle>
+            <g id="points"></g>
+          </svg>
+          <div class="center-overlay" id="centerOverlay">
+            <div class="center-panel">
+              <div class="center-count" id="centerText">開始</div>
+              <button type="button" id="centerStartBtn" class="primary">スタート</button>
+            </div>
+          </div>
+          <div class="corner-slide-nav" id="cornerSlideNav">
+            <button type="button" id="cornerPrevSlideBtn" aria-label="前のスライド">＜</button>
+            <span class="corner-slide-label" id="cornerSlideLabel">1/9</span>
+            <button type="button" id="cornerNextSlideBtn" aria-label="次のスライド">＞</button>
+          </div>
+        </div>
+        <div class="map-controls">
+          <div class="map-control-row">
+            <button type="button" id="practiceBtn" class="primary">スタート</button>
+            <button type="button" id="prevSlideBtn">前へ</button>
+            <button type="button" id="nextSlideBtn">次へ</button>
+            <button type="button" id="pauseBtn">一時停止</button>
+            <button type="button" id="answerBtn">正解を表示</button>
+          </div>
+          <div class="map-control-row">
+            <button type="button" id="retryBtn">もう一度</button>
+            <button type="button" id="prevProblemBtn">前の問題</button>
+            <button type="button" id="newBtn">別の問題</button>
+            <label class="check-control"><input type="checkbox" id="oneByOneMode">一問ごと</label>
+          </div>
+          <div class="slide-nav" id="slideNav" hidden>
+            <span id="slideLabel">1 / 9</span>
+          </div>
+        </div>
+      </div>
+
+      <aside class="side">
+        <div class="question">
+          <div class="phase" id="phaseLabel">実践</div>
+          <h2 id="questionTitle">1回目安置を選ぶ</h2>
+          <p id="questionText">4回分の予兆を見て、中央付近の1回目安置をクリック。</p>
+        </div>
+
+        <div class="route-box">
+          <div class="route"><strong>今回の基本</strong><span id="routeText">D側安置 → A側跡地 → B側跡地</span></div>
+          <div class="route"><strong>判定</strong><span id="resultText">未回答</span></div>
+        </div>
+
+        <div class="steps" id="steps"></div>
+
+        <div class="log" id="log">
+          スタートを押すと3カウント後に開始します。4回分の予兆を見て、1回目安置から1回目跡地、2回目跡地へ入る練習です。
+        </div>
+
+        <p class="source">
+          予兆1・2回目の共通安置で1回目発動を回避。1回目跡地かつ90度となりの安置で2回目発動を回避し、その90度となりの安置へ進んで（来た方向には戻らず）、3・4回目発動を回避します。
+        </p>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const markerPoints = {
+      A: { x: 50, y: 34, label: 'A' },
+      B: { x: 66, y: 50, label: 'B' },
+      C: { x: 50, y: 66, label: 'C' },
+      D: { x: 34, y: 50, label: 'D' }
+    };
+
+    const routeOrder = ['A', 'B', 'C', 'D'];
+    const P4_LIGHT_PATTERNS = [
+      { slope: 'up', label: '右肩上がり', startsDanger: false },
+      { slope: 'up', label: '右肩上がり', startsDanger: true },
+      { slope: 'down', label: '右肩下がり', startsDanger: false },
+      { slope: 'down', label: '右肩下がり', startsDanger: true }
+    ];
+
+    const patternKeys = ['BCD', 'BAD', 'DAB', 'DCB', 'ADC', 'CBA', 'CDA', 'ABC'];
+    const floodTelegraphOrders = {
+      BCD: [P4_LIGHT_PATTERNS[0], P4_LIGHT_PATTERNS[2], P4_LIGHT_PATTERNS[1], P4_LIGHT_PATTERNS[3]],
+      BAD: [P4_LIGHT_PATTERNS[2], P4_LIGHT_PATTERNS[0], P4_LIGHT_PATTERNS[3], P4_LIGHT_PATTERNS[1]],
+      DAB: [P4_LIGHT_PATTERNS[1], P4_LIGHT_PATTERNS[3], P4_LIGHT_PATTERNS[0], P4_LIGHT_PATTERNS[2]],
+      DCB: [P4_LIGHT_PATTERNS[3], P4_LIGHT_PATTERNS[1], P4_LIGHT_PATTERNS[2], P4_LIGHT_PATTERNS[0]],
+      ADC: [P4_LIGHT_PATTERNS[0], P4_LIGHT_PATTERNS[3], P4_LIGHT_PATTERNS[1], P4_LIGHT_PATTERNS[2]],
+      CBA: [P4_LIGHT_PATTERNS[1], P4_LIGHT_PATTERNS[2], P4_LIGHT_PATTERNS[0], P4_LIGHT_PATTERNS[3]],
+      CDA: [P4_LIGHT_PATTERNS[2], P4_LIGHT_PATTERNS[1], P4_LIGHT_PATTERNS[3], P4_LIGHT_PATTERNS[0]],
+      ABC: [P4_LIGHT_PATTERNS[3], P4_LIGHT_PATTERNS[0], P4_LIGHT_PATTERNS[2], P4_LIGHT_PATTERNS[1]]
+    };
+
+    const stepText = [
+      { short: '開始', title: '1回目の安置で待つ' },
+      { short: '1回目', title: '1回目が着弾したら跡地へ入る' },
+      { short: '2回目', title: '2回目が着弾したら跡地へ入る' },
+      { short: '待機', title: 'そのまま動かず3・4回目も避ける' }
+    ];
+
+    const els = {
+      arena: document.getElementById('arena'),
+      lanes: document.getElementById('lanes'),
+      points: document.getElementById('points'),
+      path: document.getElementById('path'),
+      path2: document.getElementById('path2'),
+      phaseLabel: document.getElementById('phaseLabel'),
+      questionTitle: document.getElementById('questionTitle'),
+      questionText: document.getElementById('questionText'),
+      routeText: document.getElementById('routeText'),
+      resultText: document.getElementById('resultText'),
+      log: document.getElementById('log'),
+      steps: document.getElementById('steps'),
+      stackRing: document.getElementById('stackRing'),
+      score: document.getElementById('score'),
+      mapTimer: document.getElementById('mapTimer'),
+      mapSlideTitle: document.getElementById('mapSlideTitle'),
+      timerBar: document.getElementById('timerBar'),
+      slideNav: document.getElementById('slideNav'),
+      slideLabel: document.getElementById('slideLabel'),
+      prevSlideBtn: document.getElementById('prevSlideBtn'),
+      nextSlideBtn: document.getElementById('nextSlideBtn'),
+      cornerSlideNav: document.getElementById('cornerSlideNav'),
+      cornerPrevSlideBtn: document.getElementById('cornerPrevSlideBtn'),
+      cornerNextSlideBtn: document.getElementById('cornerNextSlideBtn'),
+      cornerSlideLabel: document.getElementById('cornerSlideLabel'),
+      prevProblemBtn: document.getElementById('prevProblemBtn'),
+      newBtn: document.getElementById('newBtn'),
+      answerBtn: document.getElementById('answerBtn'),
+      practiceBtn: document.getElementById('practiceBtn'),
+      retryBtn: document.getElementById('retryBtn'),
+      pauseBtn: document.getElementById('pauseBtn'),
+      oneByOneMode: document.getElementById('oneByOneMode'),
+      centerOverlay: document.getElementById('centerOverlay'),
+      centerText: document.getElementById('centerText'),
+      centerStartBtn: document.getElementById('centerStartBtn'),
+      modeButtons: [...document.querySelectorAll('[data-mode]')]
+    };
+
+    const state = {
+      mode: 'practice',
+      key: 'BCD',
+      step: 0,
+      slide: 0,
+      showAnswer: false,
+      revealMode: 'none',
+      locked: true,
+      correct: 0,
+      total: 0,
+      timerId: 0,
+      segmentTimeoutId: 0,
+      countdownId: 0,
+      countdownStartedAt: 0,
+      endsAt: 0,
+      duration: 0,
+      selected: [],
+      pattern: null,
+      phase: 'idle',
+      activeIndex: -1,
+      answeredThisActivation: false,
+      paused: false,
+      pauseRemaining: 0,
+      pendingOnDone: null
+    };
+
+    function p4AoeVisibleLightningDanger(board, band) {
+      return board.startsDanger ? (band % 2 === 0) : (band % 2 === 1);
+    }
+
+    function p4AoePointInLightningShownDanger(pt, board) {
+      const dx = pt.x - 50;
+      const dy = pt.y - 50;
+      const deg = board.slope === 'up' ? 45 : -45;
+      const rad = deg * Math.PI / 180;
+      const xr = 50 + dx * Math.cos(rad) - dy * Math.sin(rad);
+      let band = Math.floor(xr / 25);
+      if (band < 0) band = 0;
+      if (band > 3) band = 3;
+      return p4AoeVisibleLightningDanger(board, band);
+    }
+
+    function pickPattern() {
+      const candidates = patternKeys.filter(key => key !== state.key);
+      return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+
+    function prevPatternKey() {
+      const index = patternKeys.indexOf(state.key);
+      return patternKeys[(index + patternKeys.length - 1) % patternKeys.length];
+    }
+
+    function nextPatternKey() {
+      const index = patternKeys.indexOf(state.key);
+      return patternKeys[(index + 1) % patternKeys.length];
+    }
+
+    function isAdjacentMarker(a, b) {
+      const ai = routeOrder.indexOf(a);
+      const bi = routeOrder.indexOf(b);
+      const diff = Math.abs(ai - bi);
+      return diff === 1 || diff === routeOrder.length - 1;
+    }
+
+    function buildPattern(startPoint) {
+      const lanes = floodTelegraphOrders[startPoint].map(light => ({ ...light }));
+      const firstSafe = routeOrder.filter(key => !p4AoePointInLightningShownDanger(markerPoints[key], lanes[0]));
+      const firstAfter = routeOrder.filter(key =>
+        p4AoePointInLightningShownDanger(markerPoints[key], lanes[0]) &&
+        !p4AoePointInLightningShownDanger(markerPoints[key], lanes[1])
+      );
+      const secondAfter = routeOrder.filter(key =>
+        p4AoePointInLightningShownDanger(markerPoints[key], lanes[1]) &&
+        !p4AoePointInLightningShownDanger(markerPoints[key], lanes[2]) &&
+        !p4AoePointInLightningShownDanger(markerPoints[key], lanes[3])
+      );
+      let route = null;
+      for (const first of firstSafe) {
+        for (const second of firstAfter) {
+          if (!isAdjacentMarker(first, second)) continue;
+          for (const third of secondAfter) {
+            if (!isAdjacentMarker(second, third)) continue;
+            route = [first, second, third];
+            break;
+          }
+          if (route) break;
+        }
+        if (route) break;
+      }
+      if (!route) {
+        route = [
+          firstSafe[0] || 'A',
+          firstAfter.find(key => isAdjacentMarker(firstSafe[0], key)) || firstAfter[0] || firstSafe[0] || 'B',
+          secondAfter[0] || firstAfter[0] || 'C'
+        ];
+      }
+      return {
+        start: startPoint,
+        route,
+        lanes
+      };
+    }
+
+    function resetQuestion(newPattern = true) {
+      if (newPattern) state.key = pickPattern();
+      state.pattern = buildPattern(state.key);
+      state.step = 0;
+      state.slide = 0;
+      state.showAnswer = false;
+      state.revealMode = 'none';
+      state.locked = true;
+      state.selected = [];
+      state.phase = state.mode === 'position' ? 'position' : 'idle';
+      state.activeIndex = state.mode === 'position' ? 0 : -1;
+      state.answeredThisActivation = false;
+      state.paused = false;
+      state.pauseRemaining = 0;
+      state.pendingOnDone = null;
+      els.resultText.textContent = state.mode === 'position' ? '確認中' : '未回答';
+      els.log.textContent = state.mode === 'position'
+        ? '＜＞でスライド移動。1〜4枚目が予兆、5枚目が待機、6〜9枚目が実際の発動です。'
+        : 'スタートを押すと3カウント後に開始します。';
+      setTimerScale(1);
+      render();
+    }
+
+    function setMode(mode) {
+      stopTimer();
+      stopCountdown();
+      state.mode = mode;
+      els.modeButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode));
+      state.slide = 0;
+      state.step = 0;
+      state.phase = mode === 'position' ? 'position' : 'idle';
+      state.activeIndex = mode === 'position' ? 0 : -1;
+      state.showAnswer = false;
+      state.revealMode = 'none';
+      state.locked = true;
+      state.paused = false;
+      els.resultText.textContent = mode === 'position' ? '確認中' : '未回答';
+      els.log.textContent = mode === 'position'
+        ? '＜＞でスライド移動。1〜4枚目が予兆、5枚目が待機、6〜9枚目が実際の発動です。'
+        : 'スタートを押すと3カウント後に開始します。';
+      setTimerScale(1);
+      render();
+    }
+
+    function currentPattern() {
+      return state.pattern;
+    }
+
+    function correctMarkerForStep(step = state.step) {
+      return currentPattern().route[Math.min(step, 2)];
+    }
+
+    function positionSlideInfo(slide = state.slide) {
+      if (slide <= 3) return { kind: 'telegraph', index: slide, step: 0 };
+      if (slide === 4) return { kind: 'gap', index: -1, step: 0 };
+      return { kind: 'active', index: slide - 5, step: Math.min(slide - 5, 3) };
+    }
+
+    function visibleLaneIndex() {
+      if (state.mode === 'position') return positionSlideInfo().index;
+      return state.activeIndex;
+    }
+
+    function visibleLaneIsActual(index) {
+      if (state.mode === 'position') {
+        const info = positionSlideInfo();
+        return info.kind === 'active' && info.index === index;
+      }
+      return (state.phase === 'active' || state.phase === 'reveal') && index === state.activeIndex;
+    }
+
+    function visibleStep() {
+      if (state.mode === 'position') return positionSlideInfo().step;
+      return state.step;
+    }
+
+    function singleAnswerKey() {
+      if (state.mode === 'position') {
+        const info = positionSlideInfo();
+        if (info.kind !== 'active') return null;
+        return currentPattern().route[Math.min(info.index, 2)];
+      }
+      return currentPattern().route[Math.min(state.step, 2)];
+    }
+
+    function renderLanes() {
+      const pat = currentPattern();
+      const visible = visibleLaneIndex();
+      els.lanes.innerHTML = '';
+      pat.lanes.forEach((group, index) => {
+        if (index !== visible) return;
+        const rotation = group.slope === 'up' ? 'rotate(-45 50 50)' : 'rotate(45 50 50)';
+        [0, 1, 2, 3].forEach(lane => {
+          if (!p4AoeVisibleLightningDanger(group, lane)) return;
+          const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          rect.setAttribute('x', String(lane * 25));
+          rect.setAttribute('y', '-50');
+          rect.setAttribute('width', '25');
+          rect.setAttribute('height', '200');
+          rect.setAttribute('transform', rotation);
+          const actual = visibleLaneIsActual(index);
+          rect.setAttribute('class', `lane lane-${index + 1}${actual ? ' actual-lane' : ''}`);
+          els.lanes.appendChild(rect);
+        });
+      });
+    }
+
+    function renderPoints() {
+      const pat = currentPattern();
+      const routeSet = new Set(pat.route);
+      const correct = correctMarkerForStep(visibleStep());
+      const singleAnswer = singleAnswerKey();
+      els.points.innerHTML = '';
+
+      Object.entries(markerPoints).forEach(([key, pos]) => {
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        const classes = ['point'];
+        if (state.selected.includes(key)) classes.push(key === correct ? 'good' : 'bad', 'selected-point');
+        if (state.revealMode === 'all' && routeSet.has(key)) classes.push('answer');
+        if (state.revealMode === 'single' && key === singleAnswer) classes.push('answer');
+        g.setAttribute('class', classes.join(' '));
+        g.setAttribute('data-marker', key);
+        g.setAttribute('tabindex', '0');
+        g.setAttribute('role', 'button');
+        g.setAttribute('aria-label', `${key}を選択`);
+
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', pos.x);
+        circle.setAttribute('cy', pos.y);
+        circle.setAttribute('r', '4.6');
+
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', pos.x);
+        text.setAttribute('y', pos.y + .2);
+        text.textContent = key;
+
+        g.append(circle, text);
+        g.addEventListener('click', () => chooseMarker(key));
+        g.addEventListener('keydown', ev => {
+          if (ev.key === 'Enter' || ev.key === ' ') {
+            ev.preventDefault();
+            chooseMarker(key);
+          }
+        });
+        els.points.appendChild(g);
+      });
+    }
+
+    function renderPath() {
+      const route = currentPattern().route.map(key => markerPoints[key]);
+      const first = shortenedSegment(route[0], route[1]);
+      const second = shortenedSegment(route[1], route[2]);
+      els.path.setAttribute('d', `M ${first.start.x} ${first.start.y} L ${first.end.x} ${first.end.y}`);
+      els.path2.setAttribute('d', `M ${second.start.x} ${second.start.y} L ${second.end.x} ${second.end.y}`);
+      els.path.setAttribute('opacity', state.revealMode === 'all' ? '1' : '0');
+      els.path2.setAttribute('opacity', state.revealMode === 'all' ? '1' : '0');
+      if (state.revealMode === 'all') {
+        els.path.setAttribute('marker-end', 'url(#routeArrow)');
+        els.path2.setAttribute('marker-end', 'url(#routeArrow)');
+      } else {
+        els.path.removeAttribute('marker-end');
+        els.path2.removeAttribute('marker-end');
+      }
+      const single = singleAnswerKey();
+      const current = markerPoints[single] || route[Math.min(visibleStep(), 2)];
+      els.stackRing.setAttribute('cx', current.x);
+      els.stackRing.setAttribute('cy', current.y);
+      els.stackRing.setAttribute('opacity', '0');
+    }
+
+    function shortenedSegment(from, to) {
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      const offset = 6.6;
+      const ux = dx / distance;
+      const uy = dy / distance;
+      return {
+        start: { x: from.x + ux * offset, y: from.y + uy * offset },
+        end: { x: to.x - ux * offset, y: to.y - uy * offset }
+      };
+    }
+
+    function renderQuestion() {
+      const pat = currentPattern();
+      const phaseNames = ['1回目安置', '1回目跡地', '2回目跡地', 'そのまま待機'];
+      const titles = [
+        '1回目の安置を選ぶ',
+        '1回目が着弾。入る跡地を選ぶ',
+        '2回目が着弾。次に入る跡地を選ぶ',
+        'そのまま待機'
+      ];
+      const texts = [
+        '発動した危険床を避ける安置をクリック。',
+        '1回目危険床が発動したら、その跡地へ入ります。',
+        '2回目危険床が発動したら、その跡地へ入ります。',
+        '以後は動かず、3・4回目もその位置で避けます。'
+      ];
+
+      if (state.mode === 'position') {
+        renderPositionQuestion();
+      } else if (state.phase === 'telegraph') {
+        els.phaseLabel.textContent = `予兆 ${state.activeIndex + 1} / 4`;
+        els.questionTitle.textContent = `${state.activeIndex + 1}回目の予兆`;
+        els.questionText.textContent = '赤い予兆を1秒ずつ順に覚えます。';
+      } else if (state.phase === 'gap') {
+        els.phaseLabel.textContent = '発動前';
+        els.questionTitle.textContent = '1秒後に発動開始';
+        els.questionText.textContent = '予兆と同じ順で1秒ずつ発動します。';
+      } else if (state.phase === 'active') {
+        els.phaseLabel.textContent = `発動 ${state.activeIndex + 1} / 4`;
+        els.questionTitle.textContent = titles[state.step];
+        els.questionText.textContent = state.activeIndex < 3 ? texts[state.step] : texts[3];
+      } else if (state.phase === 'finalReveal') {
+        els.phaseLabel.textContent = '正解表示';
+        els.questionTitle.textContent = '全体ルート';
+        els.questionText.textContent = '3つの安置と移動順を確認します。';
+      } else {
+        els.phaseLabel.textContent = `実践：${phaseNames[state.step]}`;
+        els.questionTitle.textContent = titles[state.step];
+        els.questionText.textContent = texts[state.step];
+      }
+      els.routeText.textContent = formatRoute(pat.route);
+      els.steps.innerHTML = stepText.map((item, index) => {
+        const currentStep = visibleStep();
+        const cls = state.showAnswer ? 'done' : index < currentStep ? 'done' : index === currentStep ? 'current' : '';
+        const route = pat.route[Math.min(index, 2)];
+        const label = index === 3 ? `${route}側で待機` : `${route}側`;
+        return `<div class="step ${cls}"><b>${index + 1}</b><span><strong>${item.short}: ${label}</strong><br>${item.title}</span></div>`;
+      }).join('');
+      els.score.textContent = `正解 ${state.correct} / ${state.total}`;
+      els.slideNav.style.display = 'none';
+      els.score.style.display = state.mode === 'practice' ? '' : 'none';
+      els.practiceBtn.style.display = '';
+      els.retryBtn.style.display = '';
+      els.pauseBtn.style.display = '';
+      els.mapTimer.style.display = state.mode === 'practice' ? 'block' : 'none';
+      els.mapSlideTitle.style.display = state.mode === 'position' ? 'grid' : 'none';
+      els.mapSlideTitle.textContent = slideTitleText(state.slide);
+      els.prevSlideBtn.style.display = state.mode === 'position' ? '' : 'none';
+      els.nextSlideBtn.style.display = state.mode === 'position' ? '' : 'none';
+      els.cornerSlideNav.style.display = state.mode === 'position' || state.mode === 'practice' ? 'flex' : 'none';
+      els.slideLabel.textContent = `${state.slide + 1} / 9`;
+      els.cornerSlideLabel.textContent = `${state.slide + 1}/9`;
+      els.prevSlideBtn.disabled = false;
+      els.nextSlideBtn.disabled = false;
+      const canUseCorner = state.mode === 'position' || (state.mode === 'practice' && state.paused);
+      els.cornerPrevSlideBtn.disabled = !canUseCorner || state.slide <= 0;
+      els.cornerNextSlideBtn.disabled = !canUseCorner || state.slide >= 8;
+    }
+
+    function slideTitleText(slide = state.slide) {
+      const info = positionSlideInfo(slide);
+      if (info.kind === 'telegraph') return `予兆 ${info.index + 1}`;
+      if (info.kind === 'gap') return '待機';
+      return `発動 ${info.index + 1}`;
+    }
+
+    function renderPositionQuestion() {
+      const info = positionSlideInfo();
+      const route = currentPattern().route;
+      if (info.kind === 'telegraph') {
+        els.phaseLabel.textContent = `位置確認 ${state.slide + 1} / 9`;
+        els.questionTitle.textContent = `予兆 ${info.index + 1}`;
+        els.questionText.textContent = '赤い予兆を確認します。予兆は4回、1秒ずつ順に表示されます。';
+        els.log.textContent = 'スライド1〜4：赤い予兆を確認。ここではまだ動きません。';
+        return;
+      }
+      if (info.kind === 'gap') {
+        els.phaseLabel.textContent = '位置確認 5 / 9';
+        els.questionTitle.textContent = '待機の1秒';
+        els.questionText.textContent = '4回分の予兆を見終わったあと、1秒待ってから同じ順で発動します。';
+        els.log.textContent = 'スライド5：床は出ていない待機時間。次から実際の発動です。';
+        return;
+      }
+      const explanations = [
+        { title: `発動1：${route[0]}側安置`, text: `水色に発動した危険床を避け、${route[0]}側の安置に立つ。` },
+        { title: `発動2：${route[1]}側跡地`, text: `1回目が発動したら、${route[1]}側の1回目跡地へ入る。` },
+        { title: `発動3：${route[2]}側跡地`, text: `2回目が発動したら、${route[2]}側の2回目跡地へ入る。` },
+        { title: `発動4：${route[2]}側で待機`, text: `そのまま動かず、3・4回目も避ける。` }
+      ];
+      const exp = explanations[info.index];
+      els.phaseLabel.textContent = `位置確認 ${state.slide + 1} / 9`;
+      els.questionTitle.textContent = exp.title;
+      els.questionText.textContent = exp.text;
+      els.log.textContent = `スライド${state.slide + 1}：${exp.text}`;
+    }
+
+    function render() {
+      renderLanes();
+      renderPath();
+      renderPoints();
+      renderQuestion();
+      renderCenterOverlay();
+    }
+
+    function renderCenterOverlay() {
+      const showStart = state.mode === 'practice' && (state.phase === 'idle' || state.phase === 'answered');
+      const showCountdown = state.mode === 'practice' && state.phase === 'countdown';
+      const showPaused = state.mode === 'practice' && state.paused;
+      els.centerOverlay.style.display = showStart || showCountdown || showPaused ? 'grid' : 'none';
+      els.centerStartBtn.style.display = showStart ? '' : 'none';
+      els.centerStartBtn.textContent = state.phase === 'answered' && els.oneByOneMode.checked ? '次の問題' : 'スタート';
+      els.centerText.style.display = showStart && !(state.phase === 'answered' && els.oneByOneMode.checked) ? 'none' : '';
+      if (showPaused) {
+        els.centerText.textContent = '停止中';
+      } else if (showCountdown) {
+        els.centerText.textContent = state.countdownText || '3';
+      } else if (state.phase === 'answered' && els.oneByOneMode.checked) {
+        els.centerText.textContent = '完了';
+      } else {
+        els.centerText.textContent = '開始';
+      }
+      els.pauseBtn.style.display = state.mode === 'practice' ? '' : 'none';
+      els.pauseBtn.textContent = state.paused ? '再開' : '一時停止';
+    }
+
+    function chooseMarker(key) {
+      if (state.mode === 'position') {
+        const info = positionSlideInfo();
+        if (info.kind !== 'active') {
+          els.log.textContent = 'ABCD選択は6〜9枚目の発動スライドで使います。';
+          return;
+        }
+        const answer = singleAnswerKey();
+        const ok = key === answer;
+        state.selected = [key];
+        els.resultText.textContent = ok ? '正解' : `不正解（正解：${answer}側）`;
+        els.log.textContent = ok
+          ? '正解。発動した危険床を避けられています。'
+          : `このスライドの正解は${answer}側です。`;
+        render();
+        return;
+      }
+      if (state.locked) return;
+      if (state.phase !== 'active' || state.activeIndex > 2) {
+        els.log.textContent = '発動中だけ回答できます。';
+        return;
+      }
+
+      const answer = correctMarkerForStep();
+      const ok = key === answer;
+      state.selected.push(key);
+      state.total += 1;
+      if (ok) state.correct += 1;
+
+      els.resultText.textContent = ok ? '正解' : `不正解（正解：${answer}側）`;
+      els.log.textContent = ok
+        ? nextLogText()
+        : `今は「${answer}側」を選ぶ場面。正解ルートは ${formatRoute(currentPattern().route)}。`;
+
+      state.answeredThisActivation = true;
+      state.locked = true;
+      render();
+    }
+
+    function nextLogText() {
+      if (state.step === 0) return '1回目安置OK。1回目の着弾を見たら、1回目跡地へ。';
+      if (state.step === 1) return '1回目跡地OK。2回目の着弾を見たら、2回目跡地へ。';
+      return '2回目跡地OK。そのまま動かず3・4回目も避ける。';
+    }
+
+    function showAnswer() {
+      if (state.mode === 'position') {
+        const info = positionSlideInfo();
+        state.revealMode = info.kind === 'active' ? (state.slide === 8 ? 'all' : 'single') : 'none';
+        state.showAnswer = state.revealMode !== 'none';
+        if (state.revealMode === 'all') {
+          els.resultText.textContent = `正解：${formatRoute(currentPattern().route)}`;
+          els.log.textContent = '9枚目は実践最後と同じく、3つの安置と移動順を表示しています。判定は最後の待機位置です。';
+        } else {
+          els.resultText.textContent = state.revealMode === 'single' ? `正解：${singleAnswerKey()}側` : '正解表示なし';
+          els.log.textContent = state.revealMode === 'single'
+            ? 'このスライドで立つ正解位置だけを表示しています。'
+            : '1〜5枚目は正解表示なしです。';
+        }
+        render();
+        return;
+      }
+      state.showAnswer = true;
+      state.revealMode = 'all';
+      state.locked = true;
+      stopTimer();
+      stopCountdown();
+      state.phase = 'answered';
+      els.resultText.textContent = `正解：${formatRoute(currentPattern().route)}`;
+      els.log.textContent = '全体の正解ルートを表示しています。';
+      render();
+    }
+
+    function startPractice(useNewPattern = false) {
+      stopTimer();
+      stopCountdown();
+      state.mode = 'practice';
+      els.modeButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.mode === 'practice'));
+      resetQuestion(useNewPattern);
+      state.locked = true;
+      state.showAnswer = false;
+      state.step = 0;
+      state.selected = [];
+      state.phase = 'countdown';
+      state.activeIndex = -1;
+      state.revealMode = 'none';
+      state.paused = false;
+      state.countdownText = '3';
+      els.phaseLabel.textContent = '実践：カウント中';
+      els.questionTitle.textContent = '3';
+      els.questionText.textContent = '開始まで待機。';
+      els.log.textContent = '3カウント後、9枚スライドで開始します。';
+      render();
+      runSegment(3000, () => {
+        stopCountdown();
+        startPracticeSlide(0);
+      });
+    }
+
+    function practiceSlideDuration(slide) {
+      return slide === 4 ? 1000 : 800;
+    }
+
+    function startPracticeSlide(slide) {
+      stopTimer();
+      state.slide = slide;
+      const info = positionSlideInfo(slide);
+      state.phase = info.kind;
+      state.activeIndex = info.index;
+      state.step = info.step;
+      state.selected = [];
+      state.showAnswer = false;
+      state.revealMode = 'none';
+      state.answeredThisActivation = false;
+      state.locked = !(info.kind === 'active' && info.index < 3);
+      els.resultText.textContent = info.kind === 'active' && info.index < 3 ? '回答中' : info.kind === 'gap' ? '待機' : '確認中';
+      if (info.kind === 'telegraph') {
+        els.log.textContent = `${slide + 1}枚目：赤い予兆を覚えます。`;
+      } else if (info.kind === 'gap') {
+        els.log.textContent = '5枚目：待機の1秒。';
+      } else if (info.index < 3) {
+        els.log.textContent = `${slide + 1}枚目：実際の安置をクリック。`;
+      } else {
+        els.log.textContent = '9枚目：そのまま待機。';
+      }
+      render();
+      runSegment(practiceSlideDuration(slide), () => {
+        if (info.kind === 'active') {
+          startSingleReveal(slide);
+        } else {
+          startPracticeSlide(slide + 1);
+        }
+      });
+    }
+
+    function startSingleReveal(slide) {
+      stopTimer();
+      const info = positionSlideInfo(slide);
+      state.slide = slide;
+      state.phase = 'reveal';
+      state.activeIndex = info.index;
+      state.step = info.step;
+      state.locked = true;
+      state.showAnswer = true;
+      state.revealMode = 'single';
+      els.resultText.textContent = `正解：${singleAnswerKey()}側`;
+      els.log.textContent = 'このスライドの正解位置だけを0.2秒表示。';
+      render();
+      runSegment(200, () => {
+        if (slide < 8) {
+          startPracticeSlide(slide + 1);
+        } else {
+          startAllReveal();
+        }
+      });
+    }
+
+    function startAllReveal() {
+      stopTimer();
+      state.phase = 'finalReveal';
+      state.activeIndex = -1;
+      state.locked = true;
+      state.showAnswer = true;
+      state.revealMode = 'all';
+      els.resultText.textContent = '完了';
+      els.log.textContent = `3秒間、全体の正解ルートを表示します。${formatRoute(currentPattern().route)}。`;
+      render();
+      runSegment(3000, () => {
+        stopTimer();
+        setTimerScale(0);
+        if (els.oneByOneMode.checked) {
+          state.phase = 'answered';
+          render();
+        } else {
+          startPractice(true);
+        }
+      });
+    }
+
+    function runSegment(duration, onDone) {
+      state.duration = duration;
+      state.endsAt = performance.now() + duration;
+      state.pendingOnDone = onDone;
+      state.paused = false;
+      tickTimer();
+      const animate = () => {
+        tickTimer();
+        if (state.timerId) state.timerId = window.requestAnimationFrame(animate);
+      };
+      state.timerId = window.requestAnimationFrame(animate);
+      state.segmentTimeoutId = window.setTimeout(() => {
+        stopTimer();
+        onDone();
+      }, duration);
+    }
+
+    function tickTimer() {
+      const left = Math.max(0, state.endsAt - performance.now());
+      setTimerScale(state.phase === 'countdown' ? 1 : left / state.duration);
+      if (state.phase === 'countdown') {
+        const nextCount = String(Math.max(1, Math.ceil(left / 1000)));
+        if (state.countdownText !== nextCount) {
+          state.countdownText = nextCount;
+          els.centerText.textContent = nextCount;
+          els.questionTitle.textContent = nextCount;
+        }
+      }
+    }
+
+    function formatRoute(route) {
+      return `${route[0]}側安置 → ${route[1]}側跡地 → ${route[2]}側跡地`;
+    }
+
+    function stopTimer() {
+      if (state.timerId) {
+        window.cancelAnimationFrame(state.timerId);
+        state.timerId = 0;
+      }
+      if (state.segmentTimeoutId) {
+        window.clearTimeout(state.segmentTimeoutId);
+        state.segmentTimeoutId = 0;
+      }
+      state.pendingOnDone = null;
+      state.pauseRemaining = 0;
+      state.paused = false;
+    }
+
+    function pauseTimer() {
+      if (!state.timerId && !state.segmentTimeoutId) return;
+      state.pauseRemaining = Math.max(0, state.endsAt - performance.now());
+      if (state.timerId) {
+        window.cancelAnimationFrame(state.timerId);
+        state.timerId = 0;
+      }
+      if (state.segmentTimeoutId) {
+        window.clearTimeout(state.segmentTimeoutId);
+        state.segmentTimeoutId = 0;
+      }
+      state.paused = true;
+      state.locked = true;
+      render();
+    }
+
+    function resumeTimer() {
+      if (!state.paused || !state.pendingOnDone) return;
+      const onDone = state.pendingOnDone;
+      const duration = Math.max(1, state.pauseRemaining);
+      state.duration = duration;
+      state.endsAt = performance.now() + duration;
+      state.paused = false;
+      if (state.phase === 'active' && state.activeIndex < 3 && !state.answeredThisActivation) {
+        state.locked = false;
+      }
+      tickTimer();
+      const animate = () => {
+        tickTimer();
+        if (state.timerId) state.timerId = window.requestAnimationFrame(animate);
+      };
+      state.timerId = window.requestAnimationFrame(animate);
+      state.segmentTimeoutId = window.setTimeout(() => {
+        stopTimer();
+        onDone();
+      }, duration);
+      render();
+    }
+
+    function setPracticePausedSlide(slide) {
+      if (state.mode !== 'practice' || !state.paused) return;
+      const nextSlide = Math.max(0, Math.min(8, slide));
+      const info = positionSlideInfo(nextSlide);
+      state.slide = nextSlide;
+      state.phase = info.kind;
+      state.activeIndex = info.index;
+      state.step = info.step;
+      state.selected = [];
+      state.showAnswer = false;
+      state.revealMode = 'none';
+      state.answeredThisActivation = false;
+      state.locked = true;
+      state.pauseRemaining = practiceSlideDuration(nextSlide);
+      state.duration = state.pauseRemaining;
+      state.pendingOnDone = () => {
+        if (info.kind === 'active') {
+          startSingleReveal(nextSlide);
+        } else {
+          startPracticeSlide(nextSlide + 1);
+        }
+      };
+      setTimerScale(1);
+      els.resultText.textContent = info.kind === 'active' && info.index < 3 ? '一時停止中' : '確認中';
+      els.log.textContent = `一時停止中：${slideTitleText(nextSlide)}を表示しています。`;
+      render();
+    }
+
+    function startFromCenterButton() {
+      if (state.mode === 'practice' && state.phase === 'answered' && els.oneByOneMode.checked) {
+        startPractice(true);
+        return;
+      }
+      startPractice(false);
+    }
+
+    function togglePause() {
+      if (state.mode !== 'practice') return;
+      if (state.paused) {
+        resumeTimer();
+      } else {
+        pauseTimer();
+      }
+    }
+
+    function stopCountdown() {
+      if (state.countdownId) {
+        window.clearInterval(state.countdownId);
+        state.countdownId = 0;
+      }
+    }
+
+    function setTimerScale(value) {
+      els.timerBar.style.setProperty('--time', Math.max(0, Math.min(1, value)));
+    }
+
+    els.newBtn.addEventListener('click', () => {
+      stopTimer();
+      stopCountdown();
+      resetQuestion(true);
+    });
+    els.prevProblemBtn.addEventListener('click', () => {
+      stopTimer();
+      stopCountdown();
+      state.key = prevPatternKey();
+      resetQuestion(false);
+    });
+    els.answerBtn.addEventListener('click', showAnswer);
+    els.practiceBtn.addEventListener('click', () => startPractice(false));
+    els.retryBtn.addEventListener('click', () => startPractice(false));
+    els.centerStartBtn.addEventListener('click', startFromCenterButton);
+    els.pauseBtn.addEventListener('click', togglePause);
+    els.oneByOneMode.addEventListener('change', render);
+    els.modeButtons.forEach(btn => btn.addEventListener('click', () => setMode(btn.dataset.mode)));
+    els.prevSlideBtn.addEventListener('click', () => {
+      if (state.mode !== 'position') return;
+      if (state.slide <= 0) {
+        state.key = prevPatternKey();
+        resetQuestion(false);
+        state.slide = 8;
+      } else {
+        state.slide -= 1;
+      }
+      state.selected = [];
+      state.showAnswer = false;
+      state.revealMode = 'none';
+      render();
+    });
+    els.nextSlideBtn.addEventListener('click', () => {
+      if (state.mode !== 'position') return;
+      if (state.slide >= 8) {
+        state.key = nextPatternKey();
+        resetQuestion(false);
+        state.slide = 0;
+      } else {
+        state.slide += 1;
+      }
+      state.selected = [];
+      state.showAnswer = false;
+      state.revealMode = 'none';
+      render();
+    });
+    els.cornerPrevSlideBtn.addEventListener('click', () => {
+      if (state.mode === 'practice' && state.paused) {
+        setPracticePausedSlide(state.slide - 1);
+        return;
+      }
+      if (state.mode !== 'position' || state.slide <= 0) return;
+      state.slide -= 1;
+      state.selected = [];
+      state.showAnswer = false;
+      state.revealMode = 'none';
+      render();
+    });
+    els.cornerNextSlideBtn.addEventListener('click', () => {
+      if (state.mode === 'practice' && state.paused) {
+        setPracticePausedSlide(state.slide + 1);
+        return;
+      }
+      if (state.mode !== 'position' || state.slide >= 8) return;
+      state.slide += 1;
+      state.selected = [];
+      state.showAnswer = false;
+      state.revealMode = 'none';
+      render();
+    });
+
+    resetQuestion(true);
+  </script>
+  <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "69e65a6b5ec64e5bb4b6a6c1c07c4667"}'></script><!-- End Cloudflare Web Analytics -->
+</body>
+</html>
