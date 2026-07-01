@@ -273,6 +273,27 @@
       font-weight: 800;
     }
 
+    .map-result-overlay {
+      position: absolute;
+      left: 50%;
+      bottom: 14px;
+      width: min(92%, 430px);
+      transform: translateX(-50%);
+      display: none;
+      z-index: 4;
+      padding: 10px;
+      border: 1px solid rgba(126, 139, 160, .8);
+      border-radius: 8px;
+      background: rgba(18, 24, 34, .9);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, .34);
+      pointer-events: none;
+    }
+
+    .map-result-overlay .result-row {
+      padding: 5px 7px;
+      font-size: 12px;
+    }
+
     .corner-slide-nav {
       position: absolute;
       top: 10px;
@@ -394,8 +415,8 @@
 
     .point circle {
       fill: #283241;
-      stroke: #9db7c3;
-      stroke-width: 1.6;
+      stroke: #8fa7b1;
+      stroke-width: 1.35;
     }
 
     .point text {
@@ -413,18 +434,29 @@
       fill: transparent !important;
       stroke: transparent !important;
       stroke-width: 0 !important;
+      opacity: 0 !important;
       pointer-events: all;
     }
 
-    .point.dim { opacity: 1; }
-    .point.good circle:not(.point-hit),
-    .point.bad circle:not(.point-hit) {
-      fill: #283241;
-      stroke: #f1c84b;
-      stroke-width: 1.8;
+    .point .selection-ring {
+      fill: none !important;
+      stroke: transparent !important;
+      stroke-width: 0 !important;
+      pointer-events: none;
     }
-    .point.selected-point circle:not(.point-hit) { stroke: #f1c84b; stroke-width: 1.8; }
-    .point.answer circle:not(.point-hit) { fill: #283241; stroke: #73e6a2; stroke-width: 2.2; }
+
+    .point .next-selection-ring {
+      fill: none !important;
+      stroke: transparent !important;
+      stroke-width: 0 !important;
+      pointer-events: none;
+    }
+
+    .point.dim { opacity: 1; }
+    .point.answer circle:not(.point-hit):not(.selection-ring):not(.next-selection-ring) { fill: #283241; stroke: #73e6a2; stroke-width: .85; }
+    .point.selected-point .selection-ring { stroke: #f1c84b !important; stroke-width: .72 !important; }
+    .point.selected-wrong .selection-ring { stroke: #ff7a70 !important; stroke-width: .72 !important; }
+    .point.next-selected .next-selection-ring { stroke: #f1c84b !important; stroke-width: .72 !important; }
 
     .stack-ring {
       fill: rgba(232, 104, 93, .12);
@@ -697,6 +729,7 @@
               <button type="button" id="centerStartBtn" class="primary">スタート</button>
             </div>
           </div>
+          <div class="map-result-overlay" id="mapResultOverlay"></div>
           <div class="corner-slide-nav" id="cornerSlideNav">
             <button type="button" id="cornerPrevSlideBtn" aria-label="前のスライド">＜</button>
             <span class="corner-slide-label" id="cornerSlideLabel">1/9</span>
@@ -795,6 +828,7 @@
       routeText: document.getElementById('routeText'),
       resultText: document.getElementById('resultText'),
       log: document.getElementById('log'),
+      mapResultOverlay: document.getElementById('mapResultOverlay'),
       steps: document.getElementById('steps'),
       stackRing: document.getElementById('stackRing'),
       score: document.getElementById('score'),
@@ -840,10 +874,13 @@
       duration: 0,
       selected: [],
       pendingSelections: [null, null, null],
+      queuedRevealSelection: null,
       answers: [],
       pattern: null,
       phase: 'idle',
       activeIndex: -1,
+      revealStep: null,
+      revealAnswer: null,
       answeredThisActivation: false,
       paused: false,
       pauseRemaining: 0,
@@ -937,9 +974,12 @@
       state.locked = true;
       state.selected = [];
       state.pendingSelections = [null, null, null];
+      state.queuedRevealSelection = null;
       state.answers = [];
       state.phase = state.mode === 'position' ? 'position' : 'idle';
       state.activeIndex = state.mode === 'position' ? 0 : -1;
+      state.revealStep = null;
+      state.revealAnswer = null;
       state.answeredThisActivation = false;
       state.paused = false;
       state.pauseRemaining = 0;
@@ -961,6 +1001,9 @@
       state.step = 0;
       state.phase = mode === 'position' ? 'position' : 'idle';
       state.activeIndex = mode === 'position' ? 0 : -1;
+      state.revealStep = null;
+      state.revealAnswer = null;
+      state.queuedRevealSelection = null;
       state.showAnswer = false;
       state.revealMode = 'none';
       state.locked = true;
@@ -1011,6 +1054,7 @@
         if (info.kind !== 'active') return null;
         return currentPattern().route[Math.min(info.index, 2)];
       }
+      if (state.phase === 'reveal' && state.revealAnswer) return state.revealAnswer.correct;
       return currentPattern().route[Math.min(state.step, 2)];
     }
 
@@ -1053,6 +1097,18 @@
         circle.setAttribute('cy', pos.y);
         circle.setAttribute('r', '4.6');
 
+        const selectionRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        selectionRing.setAttribute('class', 'selection-ring');
+        selectionRing.setAttribute('cx', pos.x);
+        selectionRing.setAttribute('cy', pos.y);
+        selectionRing.setAttribute('r', '3.35');
+
+        const nextSelectionRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        nextSelectionRing.setAttribute('class', 'next-selection-ring');
+        nextSelectionRing.setAttribute('cx', pos.x);
+        nextSelectionRing.setAttribute('cy', pos.y);
+        nextSelectionRing.setAttribute('r', '2.65');
+
         const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         text.setAttribute('x', pos.x);
         text.setAttribute('y', pos.y + .2);
@@ -1064,7 +1120,7 @@
         hit.setAttribute('cy', pos.y);
         hit.setAttribute('r', '7.8');
 
-        g.append(hit, circle, text);
+        g.append(hit, circle, selectionRing, nextSelectionRing, text);
         g.addEventListener('pointerdown', ev => {
           if (ev.button !== undefined && ev.button !== 0) return;
           ev.preventDefault();
@@ -1084,17 +1140,66 @@
     function updatePointClasses() {
       const pat = currentPattern();
       const routeSet = new Set(pat.route);
-      const correct = correctMarkerForStep(visibleStep());
+      const pendingStep = pendingAnswerStep();
+      const correct = pendingStep === null ? correctMarkerForStep(visibleStep()) : correctMarkerForStep(pendingStep);
       const singleAnswer = singleAnswerKey();
       Object.keys(markerPoints).forEach(key => {
         const g = els.points.querySelector(`[data-marker="${key}"]`);
         if (!g) return;
         const classes = ['point'];
-        if (state.selected.includes(key)) classes.push(key === correct ? 'good' : 'bad', 'selected-point');
+        const selectionClass = selectionRingClass(key, correct);
+        if (selectionClass) classes.push(selectionClass);
+        if (nextSelectionRingClass(key)) classes.push('next-selected');
         if (state.revealMode === 'all' && routeSet.has(key)) classes.push('answer');
         if (state.revealMode === 'single' && key === singleAnswer) classes.push('answer');
         g.setAttribute('class', classes.join(' '));
       });
+    }
+
+    function selectionRingClass(key, correct) {
+      if (state.mode === 'position') {
+        if (!state.selected.includes(key)) return '';
+        return key === correct ? 'selected-point' : 'selected-wrong';
+      }
+
+      if (state.phase === 'finalReveal') {
+        const related = state.answers.filter(answer => answer.selected === key);
+        if (related.some(answer => !answer.ok)) return 'selected-wrong';
+        if (related.some(answer => answer.ok)) return 'selected-point';
+        return '';
+      }
+
+      if (state.phase === 'reveal') {
+        // 今判定中のstepの選択は、正解/不正解の色で表示する
+        const shown = state.revealAnswer;
+        if (shown?.selected === key) return shown.ok ? 'selected-point' : 'selected-wrong';
+        // 判定中のstep以外で、まだ判定されていない選択（次のstep）は黄色を維持する
+        // → nextSelectionRingClass 側で next-selected として表示するのでここでは何もしない
+        return '';
+      }
+
+      // active / telegraph / gap 中：
+      // まだ判定されていない全てのpendingSelectionを黄色い〇で表示し続ける。
+      // これにより「前のstepの選択」も「次のstepの選択」も判定されるまで消えない。
+      for (let s = 0; s <= 2; s++) {
+        if (state.answers.some(answer => answer.step === s)) continue; // 判定済みは除外
+        if (state.pendingSelections[s] === key) return 'selected-point';
+      }
+      return '';
+    }
+
+    function nextSelectionRingClass(key) {
+      if (state.mode !== 'practice') return '';
+      // reveal中：判定中のstep以外で、未判定の選択（次のstep）を黄色い〇で表示する
+      if (state.phase === 'reveal') {
+        const judgedStep = state.revealStep ?? state.step;
+        for (let s = 0; s <= 2; s++) {
+          if (s === judgedStep) continue;          // 今判定中のstepは除外（正誤色で表示）
+          if (state.answers.some(a => a.step === s)) continue; // 判定済みは除外
+          if (state.pendingSelections[s] === key) return 'next-selected';
+        }
+      }
+      return '';
     }
 
     function renderPath() {
@@ -1243,6 +1348,13 @@
       renderPoints();
       renderQuestion();
       renderCenterOverlay();
+      renderMapResultOverlay();
+    }
+
+    function renderMapResultOverlay() {
+      const show = state.mode === 'practice' && state.phase === 'finalReveal' && state.revealMode === 'all';
+      els.mapResultOverlay.style.display = show ? 'block' : 'none';
+      if (show) els.mapResultOverlay.innerHTML = resultLogHtml();
     }
 
     function renderCenterOverlay() {
@@ -1250,9 +1362,9 @@
       const showCountdown = state.mode === 'practice' && state.phase === 'countdown';
       const showPaused = state.mode === 'practice' && state.paused;
       els.centerOverlay.style.display = showStart || showCountdown || showPaused ? 'grid' : 'none';
-      els.centerStartBtn.style.display = showStart ? '' : 'none';
-      els.centerStartBtn.textContent = state.phase === 'answered' && els.oneByOneMode.checked ? '次の問題' : 'スタート';
-      els.centerText.style.display = showStart && !(state.phase === 'answered' && els.oneByOneMode.checked) ? 'none' : '';
+      els.centerStartBtn.style.display = showStart || showPaused ? '' : 'none';
+      els.centerStartBtn.textContent = showPaused ? '再開' : state.phase === 'answered' && els.oneByOneMode.checked ? '次の問題' : 'スタート';
+      els.centerText.style.display = (showStart && !(state.phase === 'answered' && els.oneByOneMode.checked)) || showPaused ? 'none' : '';
       if (showPaused) {
         els.centerText.textContent = '停止中';
       } else if (showCountdown) {
@@ -1291,11 +1403,23 @@
         return;
       }
 
+      // 既に判定記録済みのstepには再選択させない
+      if (state.answers.some(answer => answer.step === step)) {
+        els.log.textContent = 'この回答はすでに判定済みです。';
+        return;
+      }
+
+      if (state.phase === 'reveal') {
+        state.queuedRevealSelection = { step, key };
+        els.log.textContent = `${key}側を次の回答として予約しました。`;
+        return;
+      }
+
       state.pendingSelections[step] = key;
       state.selected = [key];
       state.answeredThisActivation = true;
       els.resultText.textContent = `選択：${key}側`;
-      els.log.textContent = `${key}側を選択中。判定は${step + 6}枚目の最後に行います。`;
+      els.log.textContent = `${key}側を選択中。`;
       updatePointClasses();
     }
 
@@ -1314,8 +1438,47 @@
 
     function pendingAnswerStep() {
       if (state.mode !== 'practice') return null;
-      if (state.phase === 'countdown' || state.phase === 'telegraph' || state.phase === 'gap') return 0;
-      if (state.phase === 'active' && state.activeIndex < 3) return state.step;
+
+      // 判定されるタイミング（このstepのrevealが来る）まで入力を受け付ける。
+      // step0: telegraph〜slide5 active終わり（slide5 revealで判定）
+      // step1: slide5 active〜slide6 active終わり（slide6 revealで判定）
+      // step2: slide6 active〜slide7 active終わり（slide7 revealで判定）
+      //
+      // 現在のスライドから「まだ判定されていない、入力可能な最も妥当なstep」を決める。
+
+      // countdown/telegraph/gap(slide0-4) は step0 を入力
+      if (state.phase === 'countdown' || state.phase === 'telegraph' || state.phase === 'gap') {
+        return state.answers.some(a => a.step === 0) ? null : 0;
+      }
+
+      // active(index N, slide=N+5)：N回目発動を見ている。
+      // ユーザーは「N回目発動を見たら次の跡地(step N+1)を選ぶ」。
+      // よって step N+1 を主入力対象にする。
+      // ただし前スライドで入れそびれた step N がまだ未判定なら、
+      // step N+1 に何も入っていない場合に限り step N も受け付ける（猶予延長）。
+      if (state.phase === 'active') {
+        const idx = state.activeIndex;
+        const nextStep = idx + 1; // 次に向かう跡地
+        // 次のstepが未判定なら最優先
+        if (nextStep <= 2 && !state.answers.some(a => a.step === nextStep)) {
+          // 次のstepにまだ回答が入っていなければ次のstepを入力対象に
+          if (!state.pendingSelections[nextStep]) return nextStep;
+          // 既に次stepへ入力済みでも、上書き入力を許可（判定は次のrevealまで先）
+          return nextStep;
+        }
+        // 次のstepが範囲外or判定済みなら、前のstep(idx)が未判定な場合に受け付ける
+        if (idx <= 2 && !state.answers.some(a => a.step === idx)) {
+          return idx;
+        }
+        return null;
+      }
+
+      // reveal(index N)：step N を今判定中。次の step N+1 を予約入力できる。
+      if (state.phase === 'reveal') {
+        const target = (state.revealStep ?? state.step) + 1;
+        if (target > 2) return null;
+        return state.answers.some(a => a.step === target) ? null : target;
+      }
       return null;
     }
 
@@ -1324,6 +1487,9 @@
       const selected = state.pendingSelections[step];
       const correct = currentPattern().route[step];
       recordPracticeAnswer(step, selected, correct, selected === correct);
+      // 記録済みステップは以降変更不可にする
+      if (!state.lockedSteps) state.lockedSteps = [];
+      if (!state.lockedSteps.includes(step)) state.lockedSteps.push(step);
     }
 
     function resultLogHtml() {
@@ -1383,6 +1549,8 @@
       state.selected = [];
       state.phase = 'countdown';
       state.activeIndex = -1;
+      state.revealStep = null;
+      state.revealAnswer = null;
       state.revealMode = 'none';
       state.pendingSelections = [null, null, null];
       state.paused = false;
@@ -1406,9 +1574,16 @@
       stopTimer();
       state.slide = slide;
       const info = positionSlideInfo(slide);
+      applyQueuedRevealSelection(info.step);
+      // 新しいstepに入ったら入力ロックを解除（前stepのロックは残さない）
+      if (state.lockedInputStep !== undefined && state.lockedInputStep !== info.step) {
+        state.lockedInputStep = undefined;
+      }
       state.phase = info.kind;
       state.activeIndex = info.index;
       state.step = info.step;
+      state.revealStep = null;
+      state.revealAnswer = null;
       state.selected = info.step < 3 && state.pendingSelections[info.step] ? [state.pendingSelections[info.step]] : [];
       state.showAnswer = false;
       state.revealMode = 'none';
@@ -1436,6 +1611,16 @@
       });
     }
 
+    function applyQueuedRevealSelection(step) {
+      if (!state.queuedRevealSelection) return;
+      if (state.queuedRevealSelection.step === step) {
+        state.pendingSelections[step] = state.queuedRevealSelection.key;
+      }
+      if (state.queuedRevealSelection.step <= step) {
+        state.queuedRevealSelection = null;
+      }
+    }
+
     function startSingleReveal(slide) {
       stopTimer();
       const info = positionSlideInfo(slide);
@@ -1443,13 +1628,27 @@
       state.phase = 'reveal';
       state.activeIndex = info.index;
       state.step = info.step;
+      state.revealStep = info.step;
+      state.revealAnswer = null;
       state.locked = true;
       state.showAnswer = true;
       state.revealMode = 'single';
       if (info.kind === 'active' && info.index < 3) {
+        // 正解表示に入る前に、この表示で判定するstepの回答を確定させる。
+        // 直前の正解表示中にキューされた選択がこのstep向けなら反映してから判定する。
+        if (state.queuedRevealSelection && state.queuedRevealSelection.step === info.step) {
+          state.pendingSelections[info.step] = state.queuedRevealSelection.key;
+          state.queuedRevealSelection = null;
+        }
         ensureAnswerRecorded(info.step);
       }
       const recorded = state.answers.find(answer => answer.step === info.step);
+      state.revealAnswer = recorded || {
+        step: info.step,
+        selected: null,
+        correct: singleAnswerKey(),
+        ok: false
+      };
       if (recorded && info.index < 3) {
         els.resultText.textContent = recorded.ok
           ? '正解'
@@ -1473,11 +1672,16 @@
       stopTimer();
       state.phase = 'finalReveal';
       state.activeIndex = -1;
+      state.revealStep = null;
+      state.revealAnswer = null;
       state.locked = true;
       state.showAnswer = true;
       state.revealMode = 'all';
       els.resultText.textContent = '完了';
-      els.log.innerHTML = resultLogHtml();
+      const resultHtml = resultLogHtml();
+      els.log.innerHTML = resultHtml;
+      els.mapResultOverlay.innerHTML = resultHtml;
+      els.mapResultOverlay.style.display = 'block';
       render();
       runSegment(3000, () => {
         stopTimer();
@@ -1582,10 +1786,13 @@
       if (state.mode !== 'practice' || !state.paused) return;
       const nextSlide = Math.max(0, Math.min(8, slide));
       const info = positionSlideInfo(nextSlide);
+      applyQueuedRevealSelection(info.step);
       state.slide = nextSlide;
       state.phase = info.kind;
       state.activeIndex = info.index;
       state.step = info.step;
+      state.revealStep = null;
+      state.revealAnswer = null;
       state.selected = info.step < 3 && state.pendingSelections[info.step] ? [state.pendingSelections[info.step]] : [];
       state.showAnswer = false;
       state.revealMode = 'none';
@@ -1609,6 +1816,10 @@
     }
 
     function startFromCenterButton() {
+      if (state.mode === 'practice' && state.paused) {
+        resumeTimer();
+        return;
+      }
       if (state.mode === 'practice' && state.phase === 'answered' && els.oneByOneMode.checked) {
         startPractice(true);
         return;
